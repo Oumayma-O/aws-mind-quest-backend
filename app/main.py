@@ -7,9 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.database.db import engine
+from app.database.db import engine, get_db
 from app.database.models import Base
 from app.routers import auth, certification, quiz, progress, profile
+from app.utils.create_initial_admin import create_initial_admin
 
 # Configure logging
 logging.basicConfig(
@@ -27,6 +28,13 @@ async def lifespan(app: FastAPI):
     logger.info("Starting AWS Mind Quest API...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created")
+    
+    # Create initial admin user if none exists
+    try:
+        db = next(get_db())
+        create_initial_admin(db)
+    except Exception as e:
+        logger.error(f"Error creating initial admin: {e}")
     
     yield
     
