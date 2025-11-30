@@ -52,9 +52,14 @@ async def create_certification(
 ):
     """
     Create a new certification (admin only)
-    
-    Note: In production, add role-based access control
     """
+    # Check if user is admin
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user or not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can create certifications"
+        )
     
     # Check if certification already exists
     existing = db.query(Certification).filter(

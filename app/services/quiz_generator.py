@@ -1,111 +1,121 @@
-"""Quiz generation service - migrated from Supabase functions"""
-
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from uuid import UUID
 from sqlalchemy.orm import Session
-from app.database.models import Quiz, Question, UserProgress, Certification, Profile
-from app.services.llm_service import LLMService
-from app.schemas.quiz import QuestionCreate
+from app.services.quizz_pydantic_models import QuizResponse
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+
+from app.config import settings
+from app.database.models import Quiz, Question, Certification
 
 logger = logging.getLogger(__name__)
 
-# AWS domains for quiz generation
 AWS_DOMAINS = [
-    "IAM (Identity and Access Management)",
-    "EC2 (Elastic Compute Cloud)",
-    "S3 (Simple Storage Service)",
-    "VPC (Virtual Private Cloud)",
-    "RDS (Relational Database Service)",
-    "Lambda",
-    "CloudWatch",
-    "CloudFormation",
-    "Security and Compliance",
-    "Pricing and Support"
+    "IAM", "EC2", "S3", "VPC", "RDS",
+    "Lambda", "CloudWatch", "CloudFormation",
+    "Security and Compliance", "Pricing and Support"
 ]
 
 
 class QuizGeneratorService:
-    """Service for generating quizzes"""
-    
+    """Service for generating quizzes directly using LangChain + OpenAI"""
+
     def __init__(self, db: Session):
         self.db = db
-        self.llm = LLMService()
-    
+        self.llm = ChatOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            model=settings.OPENAI_MODEL,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        self.parser = PydanticOutputParser(pydantic_object=QuizResponse)
+
+    def _create_prompt(self, certification: str, difficulty: str, domains: List[str]) -> PromptTemplate:
+        domains_text = ", ".join(domains) if domains else "General AWS Topics"
+        format_instructions = self.parser.get_format_instructions()
+        template = f"""
+You are an expert AWS certification instructor.
+Generate exactly 5 quiz questions for {{certification}} at {{difficulty}} difficulty level.
+
+FOCUS PRIMARILY ON THESE AWS DOMAINS:
+{domains_text}
+
+Generate a mix of:
+- 3 multiple choice questions (single correct answer)
+- 1 multi-select question (multiple correct answers)
+- 1 true/false question
+
+For each question:
+- Make it realistic and AWS scenario-based
+- Ensure options are plausible
+- Provide a clear correct answer
+- Include a detailed educational explanation
+- Assign a correct AWS domain (e.g., EC2, IAM, VPC)
+
+{format_instructions}
+"""
+        return PromptTemplate(
+            input_variables=["certification", "difficulty","domains_text"],
+            template=template
+        )
+
     async def generate_quiz(
         self,
         user_id: UUID,
         certification_id: UUID,
         difficulty: str,
-        weak_domains: Optional[List[Dict[str, Any]]] = None
+        weak_domains: Optional[List[Dict[str, str]]] = None
     ) -> Quiz:
-        """
-        Generate a new quiz using LLM
-        
-        Migrated from: supabase/functions/generate-quiz/index.ts
-        
-        Args:
-            user_id: User ID
-            certification_id: Certification ID
-            difficulty: Difficulty level (easy, medium, hard)
-            weak_domains: List of weak domains to focus on
-            
-        Returns:
-            Quiz object with generated questions
-        """
-        
-        # Get certification
-        certification = self.db.query(Certification).filter(
-            Certification.id == certification_id
-        ).first()
+        # Fetch certification
+        certification = self.db.query(Certification)[Certification.id == certification_id].first()
         if not certification:
             raise ValueError("Certification not found")
-        
+
         # Determine focus domains
-        focus_domains = []
-        if weak_domains and len(weak_domains) > 0:
-            # Prioritize weak domains
-            focus_domains = [d.get("name") for d in weak_domains[:3]]
+        if weak_domains:
+            focus_domains = [d["name"] for d in weak_domains[:3]]
         else:
-            # Use first 3 AWS domains
-            focus_domains = [d.split("(")[0].strip() for d in AWS_DOMAINS[:3]]
-        
-        # Generate quiz using LLM
-        logger.info(f"Generating quiz for user {user_id} with focus domains: {focus_domains}")
-        quiz_data = await self.llm.generate_quiz(
-            certification=certification.name,
-            difficulty=difficulty,
-            focus_domains=focus_domains
-        )
-        
-        # Create quiz record
+            focus_domains = AWS_DOMAINS[:3]
+
+        logger.info(f"Generating quiz for user {user_id} | Domains: {focus_domains}")
+
+        # Build prompt and chain
+        prompt = self._create_prompt(certification.name, difficulty, focus_domains)
+        chain = prompt | self.llm | self.parser
+
+        quiz_response: QuizResponse = chain.invoke({
+            "certification": certification.name,
+            "difficulty": difficulty
+        })
+
+        # Save quiz
         quiz = Quiz(
             user_id=user_id,
             certification_id=certification_id,
             difficulty=difficulty,
-            total_questions=len(quiz_data.get("questions", []))
+            total_questions=len(quiz_response.questions)
         )
         self.db.add(quiz)
-        self.db.flush()  # Get quiz ID
-        
-        # Create question records
-        questions = []
-        for q in quiz_data.get("questions", []):
+        self.db.flush()
+
+        # Save questions using Pydantic models
+        for q in quiz_response.questions:
             question = Question(
                 quiz_id=quiz.id,
-                question_text=q.get("question_text"),
-                question_type=q.get("question_type"),
-                options=q.get("options"),
-                correct_answer=q.get("correct_answer"),
-                explanation=q.get("explanation"),
-                difficulty=q.get("difficulty"),
-                domain=q.get("domain")
+                question_text=q.question_text,
+                question_type=q.question_type,
+                options=q.options,
+                correct_answer=q.correct_answer,
+                explanation=q.explanation,
+                difficulty=q.difficulty,
+                domain=q.domain
             )
             self.db.add(question)
-            questions.append(question)
-        
+
         self.db.commit()
         self.db.refresh(quiz)
-        
-        logger.info(f"Quiz {quiz.id} generated successfully with {len(questions)} questions")
+        logger.info(f"Quiz {quiz.id} generated with {len(quiz_response.questions)} questions")
+
         return quiz
