@@ -33,31 +33,28 @@ class QuizGeneratorService:
         self.parser = PydanticOutputParser(pydantic_object=QuizResponse)
 
     def _create_prompt(self, certification: str, difficulty: str, domains: List[str]) -> PromptTemplate:
-        domains_text = ", ".join(domains) if domains else "General AWS Topics"
         format_instructions = self.parser.get_format_instructions()
-        template = f"""
-You are an expert AWS certification instructor.
-Generate exactly 5 quiz questions for {{certification}} at {{difficulty}} difficulty level.
-
-FOCUS PRIMARILY ON THESE AWS DOMAINS:
-{domains_text}
-
-Generate a mix of:
-- 3 multiple choice questions (single correct answer)
-- 1 multi-select question (multiple correct answers)
-- 1 true/false question
-
-For each question:
-- Make it realistic and AWS scenario-based
-- Ensure options are plausible
-- Provide a clear correct answer
-- Include a detailed educational explanation
-- Assign a correct AWS domain (e.g., EC2, IAM, VPC)
-
-{format_instructions}
-"""
+        # Escape curly braces in format_instructions by doubling them
+        format_instructions_escaped = format_instructions.replace("{", "{{").replace("}", "}}")
+        template = (
+            "You are an expert AWS certification instructor.\n"
+            "Generate exactly 5 quiz questions for {certification} at {difficulty} difficulty level.\n\n"
+            "FOCUS PRIMARILY ON THESE AWS DOMAINS:\n"
+            "{domains}\n\n"
+            "Generate a mix of:\n"
+            "- 3 multiple choice questions (single correct answer)\n"
+            "- 1 multi-select question (multiple correct answers)\n"
+            "- 1 true/false question\n\n"
+            "For each question:\n"
+            "- Make it realistic and AWS scenario-based\n"
+            "- Ensure options are plausible\n"
+            "- Provide a clear correct answer\n"
+            "- Include a detailed educational explanation\n"
+            "- Assign a correct AWS domain (e.g., EC2, IAM, VPC)\n\n"
+            f"{format_instructions_escaped}"
+        )
         return PromptTemplate(
-            input_variables=["certification", "difficulty","domains_text"],
+            input_variables=["certification", "difficulty","domains"],
             template=template
         )
 
@@ -66,7 +63,7 @@ For each question:
         user_id: UUID,
         certification_id: UUID,
         difficulty: str,
-        weak_domains: Optional[List[Dict[str, str]]] = None
+        weak_domains: Optional[List[str]] = None
     ) -> Quiz:
         # Fetch certification
         certification = self.db.query(Certification).filter(Certification.id == certification_id).first()
@@ -75,7 +72,7 @@ For each question:
 
         # Determine focus domains
         if weak_domains:
-            focus_domains = [d["name"] for d in weak_domains[:3]]
+            focus_domains = weak_domains[:3]
         else:
             focus_domains = AWS_DOMAINS[:3]
 
@@ -86,8 +83,9 @@ For each question:
         chain = prompt | self.llm | self.parser
 
         quiz_response: QuizResponse = chain.invoke({
-            "certification": certification.name,
-            "difficulty": difficulty
+            "certification": str(certification.name),
+            "difficulty": str(difficulty),
+            "domains": ", ".join(focus_domains)
         })
 
         # Save quiz

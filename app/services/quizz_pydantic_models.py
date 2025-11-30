@@ -1,12 +1,13 @@
 from typing import List, Union
 from pydantic import BaseModel
+from app.database.enums import Difficulty, QuestionType
 
 
 class QuestionBase(BaseModel):
     question_text: str
-    question_type: str
+    question_type: QuestionType
     options: List[str]
-    difficulty: str
+    difficulty: Difficulty
     domain: str
     explanation: str
 

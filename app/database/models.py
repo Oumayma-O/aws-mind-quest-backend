@@ -1,11 +1,13 @@
 """SQLAlchemy database models"""
 
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, Boolean, JSON, Numeric, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, Boolean, JSON, Numeric, CheckConstraint, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
+from app.database.enums import Difficulty, QuestionType
+
 
 Base = declarative_base()
 
@@ -80,16 +82,14 @@ class Quiz(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     certification_id = Column(UUID(as_uuid=True), ForeignKey("certifications.id"), nullable=False)
-    difficulty = Column(String(20), nullable=False, default="easy")
+    difficulty = Column(SQLEnum(Difficulty, name='difficulty_enum'), nullable=False, default=Difficulty.EASY.value)
     score = Column(Integer, default=0)
     total_questions = Column(Integer, default=0)
     xp_earned = Column(Integer, default=0)
     completed_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    __table_args__ = (
-        CheckConstraint("difficulty IN ('easy', 'medium', 'hard')", name="ck_difficulty"),
-    )
+
     
     # Relationships
     user = relationship("User", back_populates="quizzes")
@@ -107,21 +107,18 @@ class Question(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     quiz_id = Column(UUID(as_uuid=True), ForeignKey("quizzes.id", ondelete="CASCADE"), nullable=False)
     question_text = Column(Text, nullable=False)
-    question_type = Column(String(20), nullable=False)  # multiple_choice, multi_select, true_false
+    question_type = Column(SQLEnum(QuestionType, name='question_type_enum'), nullable=False)
     options = Column(JSON, nullable=False)  # List of options
     correct_answer = Column(JSON, nullable=False)  # String or List
     user_answer = Column(JSON, nullable=True)  # User's response
     explanation = Column(Text, nullable=True)
     is_correct = Column(Boolean, nullable=True)
-    difficulty = Column(String(20), nullable=False)
+    difficulty = Column(SQLEnum(Difficulty, name='difficulty_enum'), nullable=False)
     domain = Column(String(100), nullable=False)
     xp_earned = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    __table_args__ = (
-        CheckConstraint("question_type IN ('multiple_choice', 'multi_select', 'true_false')", name="ck_question_type"),
-        CheckConstraint("difficulty IN ('easy', 'medium', 'hard')", name="ck_question_difficulty"),
-    )
+
     
     # Relationships
     quiz = relationship("Quiz", back_populates="questions")
@@ -142,14 +139,13 @@ class UserProgress(Base):
     total_questions_answered = Column(Integer, default=0)
     correct_answers = Column(Integer, default=0)
     accuracy = Column(Numeric(5, 2), default=0)
-    current_difficulty = Column(String(20), default="easy")
+    current_difficulty = Column(SQLEnum(Difficulty, name='difficulty_enum'), default=Difficulty.EASY.value)
     domain_difficulties = Column(JSON, default={})  # Per-domain difficulty levels
     weak_domains = Column(JSON, default=[])  # List of weak domains
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     __table_args__ = (
         UniqueConstraint("user_id", "certification_id", name="uq_user_certification"),
-        CheckConstraint("current_difficulty IN ('easy', 'medium', 'hard')", name="ck_progress_difficulty"),
     )
     
     # Relationships

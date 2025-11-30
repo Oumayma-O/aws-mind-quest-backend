@@ -22,11 +22,24 @@ def get_token(authorization: str = None):
         )
     
     try:
-        scheme, token = authorization.split()
+        # Convert to string if it's not already (handle UUID or other types)
+        authorization = str(authorization)
+        
+        # Check if it's just a bearer token without scheme
+        if authorization.startswith("eyJ"):  # JWT tokens start with eyJ
+            return authorization
+        
+        # Otherwise, expect "Bearer <token>" format
+        parts = authorization.split()
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+        
+        scheme, token = parts
         if scheme.lower() != "bearer":
             raise ValueError("Invalid scheme")
         return token
-    except Exception:
+    except Exception as e:
+        logger.error(f"Token extraction error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authorization header format"

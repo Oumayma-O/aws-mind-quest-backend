@@ -44,7 +44,7 @@ async def generate_quiz(
         # Generate quiz using LLM service
         generator = QuizGeneratorService(db)
         quiz = await generator.generate_quiz(
-            user_id=UUID(current_user.id),
+            user_id=current_user.id,
             certification_id=request.certification_id,
             difficulty=request.difficulty,
             weak_domains=request.weak_domains
