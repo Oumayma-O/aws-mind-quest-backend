@@ -69,7 +69,7 @@ For each question:
         weak_domains: Optional[List[Dict[str, str]]] = None
     ) -> Quiz:
         # Fetch certification
-        certification = self.db.query(Certification)[Certification.id == certification_id].first()
+        certification = self.db.query(Certification).filter(Certification.id == certification_id).first()
         if not certification:
             raise ValueError("Certification not found")
 

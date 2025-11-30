@@ -4,7 +4,7 @@ import logging
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from app.database.models import User
-from app.utils.security import get_password_hash
+from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def create_initial_admin(db: Session) -> None:
             id=uuid4(),
             username="admin",
             email="admin@example.com",
-            hashed_password=get_password_hash("AdminPass123!"),
+            hashed_password=AuthService.hash_password("AdminPass123!"),
             is_admin=True,
             is_active=True
         )
