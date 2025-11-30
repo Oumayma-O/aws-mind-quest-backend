@@ -1,127 +1,160 @@
-"""OpenAI LLM service for quiz generation"""
+"""OpenAI LLM service for quiz generation using LangChain"""
 
-import json
 import logging
-from typing import List, Optional
-from openai import OpenAI
+from typing import List, Union
+from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
+
+class QuestionBase(BaseModel):
+    """Base model for quiz questions"""
+    question_text: str = Field(..., description="The quiz question text")
+    question_type: str = Field(..., description="Type: multiple_choice, multi_select, or true_false")
+    options: List[str] = Field(..., description="List of answer options")
+    difficulty: str = Field(..., description="Difficulty level: easy, medium, or hard")
+    domain: str = Field(..., description="AWS domain/topic (e.g., 'S3', 'EC2', 'IAM')")
+    explanation: str = Field(..., description="Educational explanation for the answer")
+
+
+class MultipleChoiceQuestion(QuestionBase):
+    """Single choice question"""
+    correct_answer: str = Field(..., description="The single correct answer")
+
+
+class MultiSelectQuestion(QuestionBase):
+    """Multi-select question"""
+    correct_answer: List[str] = Field(..., description="List of correct answers")
+
+
+class TrueFalseQuestion(QuestionBase):
+    """True/False question"""
+    correct_answer: str = Field(..., description="Either 'True' or 'False'")
+
+
+class QuizResponse(BaseModel):
+    """Structured response containing generated quiz questions"""
+    questions: List[Union[MultipleChoiceQuestion, MultiSelectQuestion, TrueFalseQuestion]] = Field(
+        ..., 
+        description="List of generated quiz questions"
+    )
+
+
+
 class LLMService:
-    """Service for interacting with OpenAI API"""
+    """Service for interacting with OpenAI API using LangChain"""
     
     def __init__(self):
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = settings.OPENAI_MODEL
+        """Initialize LangChain ChatOpenAI client"""
+        self.llm = ChatOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            model=settings.OPENAI_MODEL,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        self.parser = JsonOutputParser(pydantic_object=QuizResponse)
+    
+    def _create_prompt(
+        self,
+        certification: str,
+        difficulty: str,
+        focus_domains: List[str]
+    ) -> PromptTemplate:
+        """
+        Create a LangChain prompt template for quiz generation
+        
+        Args:
+            certification: Certification name
+            difficulty: Difficulty level
+            focus_domains: List of domains to focus on
+            
+        Returns:
+            PromptTemplate object
+        """
+        domains_text = ", ".join(focus_domains) if focus_domains else "General AWS topics"
+        
+        format_instructions = self.parser.get_format_instructions()
+        
+        template = f"""You are an expert AWS certification instructor. Generate exactly 5 quiz questions for {{certification}} at {{difficulty}} difficulty level.
+
+FOCUS PRIMARILY ON THESE DOMAINS: {{focus_domains}}
+
+Generate a mix of:
+- 3 multiple choice questions (single answer only)
+- 1 multi-select question (multiple correct answers)
+- 1 true/false question
+
+For each question, ensure:
+- The question is practical and reflects real AWS scenarios
+- Options are plausible and realistic
+- The explanation is detailed and educational
+- The domain accurately reflects the AWS service/topic
+
+{format_instructions}
+
+Important guidelines:
+- All questions must be at the specified difficulty level
+- Options must be valid and realistic
+- Correct answers must be clear and unambiguous
+- Explanations should educate the learner"""
+
+        return PromptTemplate(
+            input_variables=["certification", "difficulty", "focus_domains"],
+            template=template
+        )
     
     async def generate_quiz(
         self,
         certification: str,
         difficulty: str,
-        focus_domains: List[str]
-    ) -> dict:
+        focus_domains: List[str],
+        num_questions: int = 5
+    ) -> QuizResponse:
         """
-        Generate AWS quiz questions using OpenAI
+        Generate AWS quiz questions using OpenAI with structured output
         
         Args:
-            certification: Certification name (e.g., "AWS Cloud Practitioner")
+            certification: Certification name (e.g., "AWS Solutions Architect")
             difficulty: Difficulty level (easy, medium, hard)
             focus_domains: List of domains to focus on
+            num_questions: Number of questions to generate (default: 5)
             
         Returns:
-            Dictionary with generated questions
+            QuizResponse object with structured questions
+            
+        Raises:
+            ValueError: If LLM fails to generate valid structured output
         """
-        
-        domains_text = ", ".join(focus_domains) if focus_domains else "General AWS topics"
-        
-        prompt = f"""You are an expert AWS certification instructor. Generate exactly 5 quiz questions for {certification} at {difficulty} difficulty level.
-
-FOCUS PRIMARILY ON THESE DOMAINS: {domains_text}
-
-Generate a mix of:
-- 3 multiple choice questions (single answer)
-- 1 multi-select question (multiple correct answers)
-- 1 true/false question
-
-For each question, ensure:
-- The question is practical and realistic
-- Options are plausible
-- The explanation is educational and detailed
-
-Return ONLY valid JSON in this exact format (NO markdown, NO code blocks, NO extra text):
-{{
-  "questions": [
-    {{
-      "question_text": "What is the primary purpose of AWS IAM?",
-      "question_type": "multiple_choice",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correct_answer": "Option A",
-      "explanation": "Detailed explanation of why this is correct...",
-      "difficulty": "{difficulty}",
-      "domain": "IAM"
-    }},
-    {{
-      "question_text": "Which of the following are features of S3?",
-      "question_type": "multi_select",
-      "options": ["Feature A", "Feature B", "Feature C", "Feature D"],
-      "correct_answer": ["Feature A", "Feature C"],
-      "explanation": "S3 provides Features A and C...",
-      "difficulty": "{difficulty}",
-      "domain": "S3"
-    }},
-    {{
-      "question_text": "EC2 instances are serverless compute resources.",
-      "question_type": "true_false",
-      "options": ["True", "False"],
-      "correct_answer": "False",
-      "explanation": "EC2 instances are managed servers, not serverless...",
-      "difficulty": "{difficulty}",
-      "domain": "EC2"
-    }}
-  ]
-}}
-
-IMPORTANT: Return ONLY the JSON object, nothing else."""
-
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an AWS certification quiz generator. You MUST return valid JSON only, with no markdown formatting or extra text."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=2000
-            )
+            # Create prompt template
+            prompt = self._create_prompt(certification, difficulty, focus_domains)
             
-            # Extract response content
-            content = response.choices[0].message.content.strip()
+            # Create LangChain chain: Prompt -> LLM -> Parser
+            chain = prompt | self.llm | self.parser
             
-            # Clean up response (remove markdown code blocks if present)
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            content = content.strip()
+            logger.info(f"Generating {num_questions} questions for {certification} ({difficulty})")
             
-            # Parse JSON
-            quiz_data = json.loads(content)
+            # Invoke chain with input variables
+            quiz_response = chain.invoke({
+                "certification": certification,
+                "difficulty": difficulty,
+                "focus_domains": ", ".join(focus_domains) if focus_domains else "General AWS topics"
+            })
             
-            logger.info(f"Successfully generated {len(quiz_data.get('questions', []))} questions for {certification}")
-            return quiz_data
+            # Parse and validate with Pydantic
+            result = QuizResponse(**quiz_response)
             
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {e}")
-            logger.debug(f"Response content: {content}")
-            raise ValueError("LLM returned invalid JSON format")
+            logger.info(f"Successfully generated {len(result.questions)} questions for {certification}")
+            return result
+            
+        except ValueError as e:
+            logger.error(f"Validation error in quiz generation: {e}")
+            raise ValueError(f"Failed to generate valid quiz: {str(e)}")
         except Exception as e:
-            logger.error(f"Error generating quiz: {e}")
+            logger.error(f"Error generating quiz with LangChain: {e}", exc_info=True)
             raise
