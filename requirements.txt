@@ -15,7 +15,8 @@ email-validator==2.2.0
 # ---- Auth & Security ----
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.2.0
+# bcrypt 4.x can be incompatible with passlib 1.7.4; pin to 3.2.0 for compatibility
+bcrypt==3.2.0
 
 # ---- Request parsing ----
 python-multipart==0.0.9
@@ -43,4 +44,4 @@ flake8==7.1.1
 mypy==1.13.0
 
 # ---- Optional ----
-python-dotenv==1.0.1
+docker run --rm -p 8080:8080 --network your_project_network adminerdocker run --rm -p 8080:8080 --network your_project_network adminerpython-dotenv==1.0.1

@@ -14,6 +14,7 @@ from app.services.quiz_generator import QuizGeneratorService
 from app.services.quiz_evaluator import QuizEvaluatorService
 from app.routers.auth import get_current_user_dep
 from app.schemas.user import UserResponse
+from app.utils.timer import timer
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/quizzes", tags=["quizzes"])
 
 
 @router.post("/generate", response_model=QuizGenerateResponse, status_code=201)
+@timer(logger=logger)
 async def generate_quiz(
     request: QuizGenerateRequest,
     db: Session = Depends(get_db),
@@ -93,6 +95,7 @@ async def generate_quiz(
 
 
 @router.post("/{quiz_id}/evaluate", response_model=QuizEvaluateResponse)
+@timer(logger=logger)
 async def evaluate_quiz(
     quiz_id: UUID,
     request: QuizEvaluateRequest,
@@ -161,6 +164,7 @@ async def evaluate_quiz(
 
 
 @router.get("", response_model=list[QuizHistoryResponse])
+@timer(logger=logger)
 async def get_quiz_history(
     certification_id: UUID = None,
     limit: int = 20,
@@ -199,6 +203,7 @@ async def get_quiz_history(
 
 
 @router.get("/{quiz_id}", response_model=QuizDetailResponse)
+@timer(logger=logger)
 async def get_quiz_detail(
     quiz_id: UUID,
     db: Session = Depends(get_db),

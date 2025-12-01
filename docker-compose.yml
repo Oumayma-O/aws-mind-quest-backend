@@ -14,7 +14,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin"]
+      # Ask pg_isready to check the actual DB created by POSTGRES_DB to avoid
+      # connection attempts that default to the user name as database ("admin").
+      test: ["CMD-SHELL", "pg_isready -U admin -d aws_mind_quest"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,8 +47,25 @@ services:
     networks:
       - aws-mind-quest-network
 
+  # pgAdmin (web UI for Postgres)
+  pgadmin:
+    image: dpage/pgadmin4:7.6
+    container_name: aws-mind-quest-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - aws-mind-quest-network
+
 volumes:
   postgres_data:
+  pgadmin_data:
 
 networks:
   aws-mind-quest-network:
