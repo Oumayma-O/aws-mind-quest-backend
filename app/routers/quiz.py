@@ -2,12 +2,13 @@ import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.database.db import get_db
-from app.database.models import Quiz, User
 from app.schemas.quiz import (
     QuizGenerateRequest, QuizGenerateResponse, QuizEvaluateRequest,
     QuizEvaluateResponse, QuizHistoryResponse, QuizDetailResponse
 )
+from app.services.quiz_service import QuizService
 from app.services.quiz_generator import QuizGeneratorService
 from app.services.quiz_evaluator import QuizEvaluatorService
 from app.routers.auth import get_current_user_dep
@@ -172,18 +173,14 @@ async def get_quiz_history(
 ):
     """
     Get user's quiz history
-    
-    - **certification_id**: Optional filter by certification
-    - **limit**: Number of quizzes to return (default 20)
-    - **offset**: Pagination offset
     """
-    
-    query = db.query(Quiz).filter(Quiz.user_id == UUID(current_user.id))
-    
-    if certification_id:
-        query = query.filter(Quiz.certification_id == certification_id)
-    
-    quizzes = query.order_by(Quiz.created_at.desc()).limit(limit).offset(offset).all()
+    service = QuizService(db)
+    quizzes = service.get_quiz_history(
+        user_id=UUID(current_user.id),
+        certification_id=certification_id,
+        limit=limit,
+        offset=offset
+    )
     
     return [
         QuizHistoryResponse(
@@ -208,17 +205,8 @@ async def get_quiz_detail(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get detailed quiz information with all questions"""
-    
-    quiz = db.query(Quiz).filter(
-        Quiz.id == quiz_id,
-        Quiz.user_id == UUID(current_user.id)
-    ).first()
-    
-    if not quiz:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Quiz not found"
-        )
+    service = QuizService(db)
+    quiz = service.get_quiz_by_id(quiz_id, UUID(current_user.id))
     
     accuracy = (quiz.score / quiz.total_questions * 100) if quiz.total_questions > 0 else 0
     

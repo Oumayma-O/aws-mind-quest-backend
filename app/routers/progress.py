@@ -2,13 +2,14 @@
 
 import logging
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+
 from app.database.db import get_db
-from app.database.models import UserProgress, Profile, Achievement
 from app.schemas.progress import ProgressResponse, AchievementResponse, DashboardStats
 from app.routers.auth import get_current_user_dep
 from app.schemas.user import UserResponse
+from app.services.progress_service import ProgressService
 
 logger = logging.getLogger(__name__)
 
@@ -21,44 +22,21 @@ async def get_dashboard_stats(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get user dashboard statistics"""
-    
-    user_id = UUID(current_user.id)
-    
-    # Get profile
-    profile = db.query(Profile).filter(Profile.user_id == user_id).first()
-    if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User profile not found"
-        )
-    
-    # Get all progresses
-    progresses = db.query(UserProgress).filter(
-        UserProgress.user_id == user_id
-    ).all()
-    
-    # Calculate overall accuracy
-    total_questions = sum(p.total_questions_answered or 0 for p in progresses)
-    total_correct = sum(p.correct_answers or 0 for p in progresses)
-    average_accuracy = (total_correct / total_questions * 100) if total_questions > 0 else 0
-    
-    # Get recent achievements
-    recent_achievements = db.query(Achievement).filter(
-        Achievement.user_id == user_id
-    ).order_by(Achievement.earned_at.desc()).limit(5).all()
+    service = ProgressService(db)
+    stats = service.get_dashboard_stats(UUID(current_user.id))
     
     return DashboardStats(
-        total_xp=profile.xp,
-        level=profile.level,
-        current_streak=profile.current_streak,
-        total_quizzes=sum(p.total_quizzes or 0 for p in progresses),
-        total_questions=total_questions,
-        average_accuracy=average_accuracy,
+        total_xp=stats["total_xp"],
+        level=stats["level"],
+        current_streak=stats["current_streak"],
+        total_quizzes=stats["total_quizzes"],
+        total_questions=stats["total_questions"],
+        average_accuracy=stats["average_accuracy"],
         recent_achievements=[
-            AchievementResponse.model_validate(a) for a in recent_achievements
+            AchievementResponse.model_validate(a) for a in stats["recent_achievements"]
         ],
         progresses=[
-            ProgressResponse.model_validate(p) for p in progresses
+            ProgressResponse.model_validate(p) for p in stats["progresses"]
         ]
     )
 
@@ -70,18 +48,8 @@ async def get_certification_progress(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get user progress for specific certification"""
-    
-    progress = db.query(UserProgress).filter(
-        UserProgress.user_id == UUID(current_user.id),
-        UserProgress.certification_id == certification_id
-    ).first()
-    
-    if not progress:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Progress not found for this certification"
-        )
-    
+    service = ProgressService(db)
+    progress = service.get_certification_progress(UUID(current_user.id), certification_id)
     return ProgressResponse.model_validate(progress)
 
 
@@ -91,12 +59,20 @@ async def get_all_progress(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get user progress for all certifications"""
-    
-    progresses = db.query(UserProgress).filter(
-        UserProgress.user_id == UUID(current_user.id)
-    ).all()
-    
+    service = ProgressService(db)
+    progresses = service.get_all_progress(UUID(current_user.id))
     return [ProgressResponse.model_validate(p) for p in progresses]
+
+
+@router.get("/achievements", response_model=list[AchievementResponse])
+async def get_achievements(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user_dep)
+):
+    """Get all user achievements"""
+    service = ProgressService(db)
+    achievements = service.get_achievements(UUID(current_user.id))
+    return [AchievementResponse.model_validate(a) for a in achievements]
 
 
 @router.get("/achievements", response_model=list[AchievementResponse])
