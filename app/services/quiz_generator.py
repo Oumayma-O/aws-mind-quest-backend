@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langfuse.decorators import observe
-from langfuse.langchain import CallbackHandler
+from langfuse.callback import CallbackHandler
 import os
 
 from app.config import settings
@@ -172,7 +172,7 @@ class QuizGeneratorService:
                     certification_id=certification_id,
                     query=query_text,
                     top_k=10,
-                    similarity_threshold=0.7  # Keep chunks with >70% relevance
+                    similarity_threshold=0.3  # Keep chunks with >30% relevance
                 )
                 
                 if chunks:

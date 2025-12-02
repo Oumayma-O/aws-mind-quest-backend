@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -38,6 +36,9 @@ services:
       SECRET_KEY: your-secret-key-change-in-production
       ENV: development
       DEBUG: "True"
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
     ports:
       - "8000:8000"
     volumes:

@@ -1,16 +1,16 @@
 """
 Observability utilities for tracing LLM calls with Langfuse.
 """
-import os
 from typing import Optional
 from langfuse.callback import CallbackHandler
+from app.config import settings
 
 
 def get_langfuse_handler() -> Optional[CallbackHandler]:
     """
-    Returns a Langfuse callback handler if env vars are configured.
+    Returns a Langfuse callback handler if settings are configured.
     
-    Required env vars:
+    Required settings:
     - LANGFUSE_PUBLIC_KEY
     - LANGFUSE_SECRET_KEY
     - LANGFUSE_HOST (defaults to https://cloud.langfuse.com)
@@ -18,17 +18,13 @@ def get_langfuse_handler() -> Optional[CallbackHandler]:
     Returns:
         CallbackHandler if configured, None otherwise
     """
-    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
-    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
-    
-    if not public_key or not secret_key:
+    if not settings.LANGFUSE_PUBLIC_KEY or not settings.LANGFUSE_SECRET_KEY:
         return None
     
     return CallbackHandler(
-        public_key=public_key,
-        secret_key=secret_key,
-        host=host,
+        public_key=settings.LANGFUSE_PUBLIC_KEY,
+        secret_key=settings.LANGFUSE_SECRET_KEY,
+        host=settings.LANGFUSE_HOST or "https://cloud.langfuse.com",
     )
 
 

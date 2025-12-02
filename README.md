@@ -457,5 +457,3 @@ For issues, questions, or suggestions, please create an issue on GitHub.
 
 MIT License - See LICENSE file for details
 """
-
-# This is a markdown file but we'll create it as a text file since some systems might not render it

@@ -28,7 +28,7 @@ class EnhancedRetrievalService:
         certification_id: UUID,
         query: str,
         top_k: int = 10,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.3
     ) -> List[Dict[str, Any]]:
         """
         Retrieve and compress documents using embeddings-based filtering
