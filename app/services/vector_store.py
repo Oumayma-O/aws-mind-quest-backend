@@ -99,7 +99,7 @@ class VectorStore:
         self,
         certification_id: UUID,
         query_embedding: List[float],
-        top_k: int = 10,
+        top_k: int = 15,
         document_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Search for similar chunks"""

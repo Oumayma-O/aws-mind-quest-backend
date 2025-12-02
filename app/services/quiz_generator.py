@@ -6,12 +6,16 @@ from app.services.quizz_pydantic_models import QuizResponse
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
+from langfuse.decorators import observe
+from langfuse.langchain import CallbackHandler
+import os
 
 from app.config import settings
 from app.database.models import Quiz, Question, Certification, CertificationDocument
 from app.services.vector_store import vector_store
 from app.services.embedding_service import embedding_service
 from app.services.document_processor import document_processor
+from app.services.retrieval_service import retrieval_service
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -28,6 +32,11 @@ class QuizGeneratorService:
 
     def __init__(self, db: Session):
         self.db = db
+        
+        # Initialize Langfuse callback handler
+        self.langfuse_handler = CallbackHandler()
+        logger.info("Langfuse tracing initialized for quiz generation")
+        
         self.llm = ChatOpenAI(
             api_key=settings.OPENAI_API_KEY,
             model=settings.OPENAI_MODEL,
@@ -80,6 +89,7 @@ class QuizGeneratorService:
             template=template
         )
 
+    @observe(name="generate_quiz")
     async def generate_quiz(
         self,
         user_id: UUID,
@@ -150,24 +160,33 @@ class QuizGeneratorService:
 
         logger.info(f"Generating quiz for user {user_id} | Domains: {focus_domains}")
 
-        # Retrieve relevant context from vector store
+        # Retrieve relevant context from vector store with compression
         context = ""
         try:
             if vector_store.collection_exists(certification_id):
                 # Create search query from domains
                 query_text = f"AWS {certification.name} exam questions about {', '.join(focus_domains)}"
-                query_embedding = embedding_service.embed_text(query_text)
                 
-                # Retrieve top 10 relevant chunks
-                chunks = vector_store.search(
+                # Use enhanced retrieval with contextual compression
+                chunks = retrieval_service.retrieve_with_compression(
                     certification_id=certification_id,
-                    query_embedding=query_embedding,
-                    top_k=10
+                    query=query_text,
+                    top_k=10,
+                    similarity_threshold=0.7  # Keep chunks with >70% relevance
                 )
                 
                 if chunks:
                     context = "\n\n".join([f"[Source: Page {c['metadata']['page_number']}]\n{c['text']}" for c in chunks])
-                    logger.info(f"Retrieved {len(chunks)} relevant chunks from vector store")
+                    logger.info(f"Retrieved {len(chunks)} compressed chunks from vector store")
+                    
+                    # Log document previews for debugging/monitoring
+                    logger.info("=== Retrieved Document Previews (Compressed) ===")
+                    for i, chunk in enumerate(chunks[:5], 1):  # Log first 5 chunks
+                        preview = chunk['text'][:200].replace('\n', ' ')
+                        score = chunk.get('score', 'N/A')
+                        page = chunk['metadata'].get('page_number', 'N/A')
+                        logger.info(f"  Chunk {i} [Page {page}, Score: {score}]: {preview}...")
+                    logger.info("=== End Previews ===")
                 else:
                     logger.warning("No chunks retrieved from vector store")
             else:
@@ -188,7 +207,10 @@ class QuizGeneratorService:
         if context:
             invoke_params["context"] = context
 
-        quiz_response: QuizResponse = chain.invoke(invoke_params)
+        quiz_response: QuizResponse = chain.invoke(
+            invoke_params,
+            config={"callbacks": [self.langfuse_handler]}
+        )
 
         # Save quiz
         quiz = Quiz(

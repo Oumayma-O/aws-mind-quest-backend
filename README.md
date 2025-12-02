@@ -71,8 +71,11 @@ This is a FastAPI backend for the AWS Mind Quest application - an AI-powered pla
 
 2. **Install dependencies**
    ```bash
-   pip install -r requirements.txt
+   pip install -r requirements.txt -r requirements-dev.txt
    ```
+   
+   > **Note**: This project uses [pip-tools](https://pip-tools.readthedocs.io/) for dependency management. 
+   > See [DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md) for details on managing dependencies.
 
 3. **Setup PostgreSQL** (using local PostgreSQL or Docker just for DB)
    ```bash
