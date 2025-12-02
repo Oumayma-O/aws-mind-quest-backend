@@ -24,6 +24,7 @@ class Certification(Base):
     # Relationships
     profiles = relationship("Profile", back_populates="selected_certification")
     quizzes = relationship("Quiz", back_populates="certification")
+    documents = relationship("CertificationDocument", back_populates="certification", cascade="all, delete-orphan")
     user_progresses = relationship("UserProgress", back_populates="certification")
     
     def __repr__(self):
@@ -125,6 +126,26 @@ class Question(Base):
     
     def __repr__(self):
         return f"<Question {self.id}>"
+
+
+class CertificationDocument(Base):
+    """Documents associated with a certification (exam guides, PDFs, training)."""
+    __tablename__ = "certification_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    certification_id = Column(UUID(as_uuid=True), ForeignKey("certifications.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    s3_key = Column(String(1024), nullable=True)
+    uri = Column(String(1024), nullable=True)  # S3 URI: s3://bucket/key
+    processing_status = Column(String(20), default="pending")  # pending, processing, completed, failed
+    processed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    certification = relationship("Certification", back_populates="documents")
+
+    def __repr__(self):
+        return f"<CertificationDocument {self.filename} for {self.certification_id}>"
 
 
 class UserProgress(Base):

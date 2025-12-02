@@ -8,7 +8,11 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 
 from app.config import settings
-from app.database.models import Quiz, Question, Certification
+from app.database.models import Quiz, Question, Certification, CertificationDocument
+from app.services.vector_store import vector_store
+from app.services.embedding_service import embedding_service
+from app.services.document_processor import document_processor
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +36,26 @@ class QuizGeneratorService:
         )
         self.parser = PydanticOutputParser(pydantic_object=QuizResponse)
 
-    def _create_prompt(self, certification: str, difficulty: str, domains: List[str]) -> PromptTemplate:
+    def _create_prompt(self, certification: str, difficulty: str, domains: List[str], context: str = "") -> PromptTemplate:
         format_instructions = self.parser.get_format_instructions()
         # Escape curly braces in format_instructions by doubling them
         format_instructions_escaped = format_instructions.replace("{", "{{").replace("}", "}}")
+        
+        context_section = ""
+        if context:
+            context_section = (
+                "\n\nUSE THE FOLLOWING OFFICIAL CERTIFICATION CONTENT AS YOUR PRIMARY SOURCE:\n"
+                "===== CERTIFICATION EXAM GUIDE CONTENT =====\n"
+                "{context}\n"
+                "===== END OF CONTENT =====\n\n"
+                "Base your questions DIRECTLY on the content above. "
+                "Questions should test understanding of the specific topics, services, and concepts mentioned.\n"
+            )
+        
         template = (
             "You are an expert AWS certification instructor.\n"
             "Generate exactly 5 quiz questions for {certification} at {difficulty} difficulty level.\n\n"
+            f"{context_section}"
             "FOCUS PRIMARILY ON THESE AWS DOMAINS:\n"
             "{domains}\n\n"
             "Generate a mix of:\n"
@@ -53,8 +70,13 @@ class QuizGeneratorService:
             "- Assign a correct AWS domain (e.g., EC2, IAM, VPC)\n\n"
             f"{format_instructions_escaped}"
         )
+        
+        input_vars = ["certification", "difficulty", "domains"]
+        if context:
+            input_vars.append("context")
+        
         return PromptTemplate(
-            input_variables=["certification", "difficulty","domains"],
+            input_variables=input_vars,
             template=template
         )
 
@@ -69,6 +91,56 @@ class QuizGeneratorService:
         certification = self.db.query(Certification).filter(Certification.id == certification_id).first()
         if not certification:
             raise ValueError("Certification not found")
+        
+        # Check if documents exist and are processed
+        documents = self.db.query(CertificationDocument).filter(
+            CertificationDocument.certification_id == certification_id
+        ).all()
+        
+        if documents:
+            # Check if any documents need processing
+            unprocessed = [doc for doc in documents if doc.processing_status != "completed"]
+            
+            if unprocessed:
+                logger.info(f"Found {len(unprocessed)} unprocessed documents. Processing before quiz generation...")
+                
+                for doc in unprocessed:
+                    try:
+                        # Update status
+                        doc.processing_status = "processing"
+                        self.db.commit()
+                        
+                        logger.info(f"Processing document {doc.filename}")
+                        
+                        # Process document
+                        chunks = document_processor.process_document(
+                            url=doc.uri,
+                            certification_id=str(certification_id),
+                            document_id=str(doc.id)
+                        )
+                        
+                        # Generate embeddings
+                        chunk_texts = [chunk.text for chunk in chunks]
+                        embeddings = embedding_service.embed_texts(chunk_texts)
+                        
+                        # Store in vector database
+                        chunk_data = [
+                            {"text": chunk.text, "metadata": chunk.metadata}
+                            for chunk in chunks
+                        ]
+                        vector_store.upsert_chunks(str(certification_id), chunk_data, embeddings)
+                        
+                        # Update status
+                        doc.processing_status = "completed"
+                        doc.processed_at = datetime.utcnow()
+                        self.db.commit()
+                        
+                        logger.info(f"Successfully processed document {doc.filename}")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to process document {doc.filename}: {e}")
+                        doc.processing_status = "failed"
+                        self.db.commit()
 
         # Determine focus domains
         if weak_domains:
@@ -78,15 +150,45 @@ class QuizGeneratorService:
 
         logger.info(f"Generating quiz for user {user_id} | Domains: {focus_domains}")
 
+        # Retrieve relevant context from vector store
+        context = ""
+        try:
+            if vector_store.collection_exists(certification_id):
+                # Create search query from domains
+                query_text = f"AWS {certification.name} exam questions about {', '.join(focus_domains)}"
+                query_embedding = embedding_service.embed_text(query_text)
+                
+                # Retrieve top 10 relevant chunks
+                chunks = vector_store.search(
+                    certification_id=certification_id,
+                    query_embedding=query_embedding,
+                    top_k=10
+                )
+                
+                if chunks:
+                    context = "\n\n".join([f"[Source: Page {c['metadata']['page_number']}]\n{c['text']}" for c in chunks])
+                    logger.info(f"Retrieved {len(chunks)} relevant chunks from vector store")
+                else:
+                    logger.warning("No chunks retrieved from vector store")
+            else:
+                logger.warning(f"Vector collection does not exist for certification {certification_id}")
+        except Exception as e:
+            logger.error(f"Failed to retrieve context from vector store: {e}")
+            # Continue without context
+
         # Build prompt and chain
-        prompt = self._create_prompt(certification.name, difficulty, focus_domains)
+        prompt = self._create_prompt(certification.name, difficulty, focus_domains, context)
         chain = prompt | self.llm | self.parser
 
-        quiz_response: QuizResponse = chain.invoke({
+        invoke_params = {
             "certification": str(certification.name),
             "difficulty": str(difficulty),
             "domains": ", ".join(focus_domains)
-        })
+        }
+        if context:
+            invoke_params["context"] = context
+
+        quiz_response: QuizResponse = chain.invoke(invoke_params)
 
         # Save quiz
         quiz = Quiz(

@@ -11,6 +11,13 @@ from app.database.db import engine, get_db
 from app.database.models import Base
 from app.routers import auth, certification, quiz, progress, profile
 from app.utils.create_initial_admin import create_initial_admin
+from app.utils.seed_certifications import seed_certifications
+from app.services.document_processor import document_processor
+from app.services.embedding_service import embedding_service
+from app.services.vector_store import vector_store
+from app.database.models import CertificationDocument
+from datetime import datetime
+import threading
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +25,61 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def process_seed_documents_background(documents_to_process):
+    """Process seed documents in background thread"""
+    logger.info(f"Starting background processing of {len(documents_to_process)} seed documents")
+    
+    db = next(get_db())
+    try:
+        for doc_id, cert_id in documents_to_process:
+            try:
+                doc = db.query(CertificationDocument).filter(
+                    CertificationDocument.id == doc_id
+                ).first()
+                
+                if not doc or doc.processing_status == "completed":
+                    continue
+                
+                # Update status
+                doc.processing_status = "processing"
+                db.commit()
+                
+                logger.info(f"Processing seed document {doc.filename}")
+                
+                # Process document
+                chunks = document_processor.process_document(
+                    url=doc.uri,
+                    certification_id=cert_id,
+                    document_id=doc_id
+                )
+                
+                # Generate embeddings
+                chunk_texts = [chunk.text for chunk in chunks]
+                embeddings = embedding_service.embed_texts(chunk_texts)
+                
+                # Store in vector database
+                chunk_data = [
+                    {"text": chunk.text, "metadata": chunk.metadata}
+                    for chunk in chunks
+                ]
+                vector_store.upsert_chunks(cert_id, chunk_data, embeddings)
+                
+                # Update status
+                doc.processing_status = "completed"
+                doc.processed_at = datetime.utcnow()
+                db.commit()
+                
+                logger.info(f"Successfully processed seed document {doc.filename}")
+                
+            except Exception as e:
+                logger.error(f"Failed to process seed document {doc_id}: {e}")
+                if doc:
+                    doc.processing_status = "failed"
+                    db.commit()
+    finally:
+        db.close()
 
 
 # Lifespan context manager
@@ -33,6 +95,21 @@ async def lifespan(app: FastAPI):
     try:
         db = next(get_db())
         create_initial_admin(db)
+        # Seed predefined certifications and get documents to process
+        try:
+            documents_to_process = seed_certifications(db)
+            
+            # Process seed documents in background thread
+            if documents_to_process:
+                thread = threading.Thread(
+                    target=process_seed_documents_background,
+                    args=(documents_to_process,),
+                    daemon=True
+                )
+                thread.start()
+                logger.info(f"Started background thread to process {len(documents_to_process)} seed documents")
+        except Exception as e:
+            logger.error(f"Error seeding certifications: {e}")
     except Exception as e:
         logger.error(f"Error creating initial admin: {e}")
     

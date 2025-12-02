@@ -34,6 +34,7 @@ services:
       DATABASE_URL: postgresql://admin:password@postgres:5432/aws_mind_quest
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: gpt-4o-mini
+      QDRANT_URL: http://qdrant:6333
       SECRET_KEY: your-secret-key-change-in-production
       ENV: development
       DEBUG: "True"
@@ -49,7 +50,7 @@ services:
 
   # pgAdmin (web UI for Postgres)
   pgadmin:
-    image: dpage/pgadmin4:7.6
+    image: dpage/pgadmin4:latest
     container_name: aws-mind-quest-pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
@@ -63,9 +64,22 @@ services:
     networks:
       - aws-mind-quest-network
 
+  # Qdrant (Vector Database)
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: aws-mind-quest-qdrant
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC (optional)
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - aws-mind-quest-network
+
 volumes:
   postgres_data:
   pgadmin_data:
+  qdrant_data:
 
 networks:
   aws-mind-quest-network:

@@ -37,3 +37,7 @@ env/
 *.swo
 *~
 .DS_Store
+
+# Test notebooks
+test_document_processing.ipynb
+.ipynb_checkpoints/

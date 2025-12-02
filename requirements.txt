@@ -33,6 +33,13 @@ langchain-openai>=0.2.0
 # ---- Cloud ----
 boto3==1.35.50
 
+# ---- Vector Database ----
+qdrant-client==1.12.0
+
+# ---- Document Processing ----
+PyPDF2==3.0.1
+langchain-text-splitters==0.3.0
+
 # ---- Testing ----
 pytest==8.3.3
 pytest-asyncio==0.24.0
@@ -44,4 +51,4 @@ flake8==7.1.1
 mypy==1.13.0
 
 # ---- Optional ----
-docker run --rm -p 8080:8080 --network your_project_network adminerdocker run --rm -p 8080:8080 --network your_project_network adminerpython-dotenv==1.0.1
+python-dotenv==1.0.1
