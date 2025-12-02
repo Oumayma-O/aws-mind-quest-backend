@@ -82,7 +82,8 @@ class CertificationService:
         # Handle document uploads
         if documents:
             for file in documents:
-                self._upload_document(certification.id, file)
+                # Persist each document immediately so background tasks can find it
+                self.add_document(certification.id, file)
         
         self.db.commit()
         self.db.refresh(certification)
@@ -90,8 +91,8 @@ class CertificationService:
         logger.info(f"Created certification: {certification.name} (ID: {certification.id})")
         return certification
     
-    def _upload_document(self, certification_id: UUID, file: UploadFile) -> CertificationDocument:
-        """Upload and register a document for a certification"""
+    def add_document(self, certification_id: UUID, file: UploadFile) -> CertificationDocument:
+        """Upload and register a document for a certification. Commits the record."""
         if not file.filename or not file.filename.endswith('.pdf'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -111,7 +112,8 @@ class CertificationService:
             processing_status="pending"
         )
         self.db.add(doc)
-        self.db.flush()
+        self.db.commit()
+        self.db.refresh(doc)
         
         logger.info(f"Uploaded document: {file.filename} for certification {certification_id}")
         return doc

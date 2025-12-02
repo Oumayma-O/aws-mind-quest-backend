@@ -15,13 +15,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 
+def get_profile_service(db: Session = Depends(get_db)) -> ProfileService:
+    """Provide ProfileService via DI per request."""
+    return ProfileService(db)
+
 @router.get("", response_model=ProfileResponse)
 async def get_profile(
     db: Session = Depends(get_db),
+    service: ProfileService = Depends(get_profile_service),
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get current user's profile"""
-    service = ProfileService(db)
     profile = service.get_profile(UUID(current_user.id))
     return ProfileResponse.model_validate(profile)
 
@@ -30,10 +34,10 @@ async def get_profile(
 async def update_profile(
     update_data: ProfileUpdate,
     db: Session = Depends(get_db),
+    service: ProfileService = Depends(get_profile_service),
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Update user profile"""
-    service = ProfileService(db)
     profile = service.update_profile(
         user_id=UUID(current_user.id),
         selected_certification_id=update_data.selected_certification_id

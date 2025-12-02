@@ -20,11 +20,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/quizzes", tags=["quizzes"])
 
 
+def get_quiz_service(db: Session = Depends(get_db)) -> QuizService:
+    """Provide QuizService via DI per request."""
+    return QuizService(db)
+
+
+def get_quiz_generator_service(db: Session = Depends(get_db)) -> QuizGeneratorService:
+    """Provide QuizGeneratorService via DI per request."""
+    return QuizGeneratorService(db)
+
+
+def get_quiz_evaluator_service(db: Session = Depends(get_db)) -> QuizEvaluatorService:
+    """Provide QuizEvaluatorService via DI per request."""
+    return QuizEvaluatorService(db)
+
+
 @router.post("/generate", response_model=QuizGenerateResponse, status_code=201)
 @timer(logger=logger)
 async def generate_quiz(
     request: QuizGenerateRequest,
     db: Session = Depends(get_db),
+    generator: QuizGeneratorService = Depends(get_quiz_generator_service),
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """
@@ -43,7 +59,6 @@ async def generate_quiz(
     
     try:
         # Generate quiz using LLM service
-        generator = QuizGeneratorService(db)
         quiz = await generator.generate_quiz(
             user_id=current_user.id,
             certification_id=request.certification_id,
@@ -99,6 +114,7 @@ async def evaluate_quiz(
     quiz_id: UUID,
     request: QuizEvaluateRequest,
     db: Session = Depends(get_db),
+    evaluator: QuizEvaluatorService = Depends(get_quiz_evaluator_service),
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """
@@ -128,7 +144,6 @@ async def evaluate_quiz(
     
     try:
         # Evaluate quiz using evaluator service
-        evaluator = QuizEvaluatorService(db)
         result = await evaluator.evaluate_quiz(
             user_id=UUID(current_user.id),
             quiz_id=quiz_id,
@@ -169,12 +184,12 @@ async def get_quiz_history(
     limit: int = 20,
     offset: int = 0,
     db: Session = Depends(get_db),
+    service: QuizService = Depends(get_quiz_service),
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """
     Get user's quiz history
     """
-    service = QuizService(db)
     quizzes = service.get_quiz_history(
         user_id=UUID(current_user.id),
         certification_id=certification_id,
@@ -202,10 +217,10 @@ async def get_quiz_history(
 async def get_quiz_detail(
     quiz_id: UUID,
     db: Session = Depends(get_db),
+    service: QuizService = Depends(get_quiz_service),
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get detailed quiz information with all questions"""
-    service = QuizService(db)
     quiz = service.get_quiz_by_id(quiz_id, UUID(current_user.id))
     
     accuracy = (quiz.score / quiz.total_questions * 100) if quiz.total_questions > 0 else 0

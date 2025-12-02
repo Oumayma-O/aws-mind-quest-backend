@@ -15,20 +15,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/certifications", tags=["certifications"])
 
 
+def get_certification_service(db: Session = Depends(get_db)) -> CertificationService:
+    """Provide a CertificationService instance per request via DI."""
+    return CertificationService(db)
+
+
 @router.get("", response_model=List[CertificationResponse])
-async def list_certifications(db: Session = Depends(get_db)):
+async def list_certifications(
+    db: Session = Depends(get_db),
+    service: CertificationService = Depends(get_certification_service)
+):
     """Get all available AWS certifications"""
-    service = CertificationService(db)
     return service.list_all()
 
 
 @router.get("/{certification_id}", response_model=CertificationResponse)
 async def get_certification(
     certification_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    service: CertificationService = Depends(get_certification_service)
 ):
     """Get specific certification by ID"""
-    service = CertificationService(db)
     certification = service.get_by_id(certification_id)
     
     if not certification:
@@ -47,11 +54,10 @@ async def create_certification(
     description: str | None = Form(None),
     documents: list[UploadFile] | None = File(None),
     db: Session = Depends(get_db),
+    service: CertificationService = Depends(get_certification_service),
     current_user: UserResponse = Depends(get_current_user_dep),
 ):
     """Create a new certification (admin only)"""
-    service = CertificationService(db)
-    
     # Convert UploadFile to list if needed
     doc_list = documents if documents else None
     
@@ -81,11 +87,10 @@ async def upload_certification_document(
     certification_id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    service: CertificationService = Depends(get_certification_service),
     current_user: UserResponse = Depends(get_current_user_dep),
 ):
     """Upload a document for a certification (admin only)"""
-    service = CertificationService(db)
-    
     # Verify certification exists
     if not service.get_by_id(certification_id):
         raise HTTPException(
@@ -94,8 +99,7 @@ async def upload_certification_document(
         )
     
     # Upload document
-    doc = service._upload_document(certification_id, file)
-    db.commit()
+    doc = service.add_document(certification_id, file)
     
     # Queue background processing
     background_tasks.add_task(
@@ -119,7 +123,6 @@ async def delete_document(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Delete a certification document (admin only)"""
-    service = CertificationService(db)
     service.delete_document(document_id, current_user.id)
     return {"detail": "Document deleted"}
 
@@ -127,10 +130,10 @@ async def delete_document(
 @router.get("/{certification_id}/documents")
 async def get_certification_documents(
     certification_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    service: CertificationService = Depends(get_certification_service)
 ):
     """Get all documents for a certification"""
-    service = CertificationService(db)
     documents = service.get_documents(certification_id)
     
     return [
