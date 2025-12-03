@@ -4,7 +4,7 @@ import logging
 from typing import List, Dict, Any
 from io import BytesIO
 import requests
-from PyPDF2 import PdfReader
+import pdfplumber
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.config import settings
 
@@ -91,19 +91,18 @@ class DocumentProcessor:
             raise
     
     def extract_text_from_pdf(self, file_obj: BytesIO) -> List[Dict[str, Any]]:
-        """Extract text from PDF, preserving page numbers"""
+        """Extract text from PDF with pdfplumber, preserving page numbers and layout."""
         try:
-            pdf_reader = PdfReader(file_obj)
-            pages = []
-            
-            for page_num, page in enumerate(pdf_reader.pages, start=1):
-                text = page.extract_text()
-                if text.strip():  # Only add non-empty pages
-                    pages.append({
-                        "page_number": page_num,
-                        "text": text
-                    })
-            
+            pages: List[Dict[str, Any]] = []
+            with pdfplumber.open(file_obj) as pdf:
+                for page_num, page in enumerate(pdf.pages, start=1):
+                    text = page.extract_text(layout=True) or ""
+                    cleaned = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+                    if cleaned:
+                        pages.append({
+                            "page_number": page_num,
+                            "text": cleaned
+                        })
             logger.info(f"Extracted {len(pages)} pages from PDF")
             return pages
         except Exception as e:
