@@ -162,19 +162,18 @@ class QuizGeneratorService:
 
         logger.info(f"Generating quiz for user {user_id} | Domains: {focus_domains}")
 
-        # Retrieve relevant context from vector store with compression
+        # Retrieve relevant context from vector store with randomization
         context = ""
         try:
             if vector_store.collection_exists(certification_id):
                 # Create search query from domains
                 query_text = f"AWS {certification.name} exam questions about {', '.join(focus_domains)}"
                 
-                # Use enhanced retrieval with contextual compression
-                chunks = retrieval_service.retrieve_with_compression(
+                # Use randomized retrieval for diversity across quizzes
+                chunks = retrieval_service.retrieve_with_randomization(
                     certification_id=certification_id,
                     query=query_text,
-                    top_k=10,
-                    similarity_threshold=0.3  # Keep chunks with >30% relevance
+                    top_k=10
                 )
                 
                 if chunks:
