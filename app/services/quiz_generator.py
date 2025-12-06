@@ -9,6 +9,8 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langfuse.decorators import observe
 from langfuse.callback import CallbackHandler
 import os
+import time
+from decimal import Decimal
 
 from app.config import settings
 from app.database.models import Quiz, Question, Certification, CertificationDocument
@@ -69,7 +71,7 @@ class QuizGeneratorService:
             "{domains}\n\n"
             "Generate a mix of:\n"
             "- 3 multiple choice questions (single correct answer)\n"
-            "- 1 multi-select question (multiple correct answers)\n"
+            "- 1 multi-select question (MUST have 2 or more correct answers, NOT just 1,and don't mention (select two)per example in the question text)\n"
             "- 1 true/false question\n\n"
             "For each question:\n"
             "- Make it realistic and AWS scenario-based\n"
@@ -207,17 +209,22 @@ class QuizGeneratorService:
         if context:
             invoke_params["context"] = context
 
+        # Track generation time
+        start_time = time.time()
         quiz_response: QuizResponse = chain.invoke(
             invoke_params,
             config={"callbacks": [self.langfuse_handler]}
         )
+        generation_time_seconds = time.time() - start_time
 
-        # Save quiz
+        # Save quiz with generation metrics
         quiz = Quiz(
             user_id=user_id,
             certification_id=certification_id,
             difficulty=difficulty,
-            total_questions=len(quiz_response.questions)
+            total_questions=len(quiz_response.questions),
+            generation_time_seconds=Decimal(str(round(generation_time_seconds, 2))),
+            llm_model=settings.OPENAI_MODEL
         )
         self.db.add(quiz)
         self.db.flush()

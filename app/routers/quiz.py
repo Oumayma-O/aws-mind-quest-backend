@@ -145,7 +145,7 @@ async def evaluate_quiz(
     try:
         # Evaluate quiz using evaluator service
         result = await evaluator.evaluate_quiz(
-            user_id=UUID(current_user.id),
+            user_id=current_user.id,
             quiz_id=quiz_id,
             answers=request.answers
         )
@@ -191,7 +191,7 @@ async def get_quiz_history(
     Get user's quiz history
     """
     quizzes = service.get_quiz_history(
-        user_id=UUID(current_user.id),
+        user_id=current_user.id,
         certification_id=certification_id,
         limit=limit,
         offset=offset
@@ -221,7 +221,7 @@ async def get_quiz_detail(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get detailed quiz information with all questions"""
-    quiz = service.get_quiz_by_id(quiz_id, UUID(current_user.id))
+    quiz = service.get_quiz_by_id(quiz_id, current_user.id)
     
     accuracy = (quiz.score / quiz.total_questions * 100) if quiz.total_questions > 0 else 0
     

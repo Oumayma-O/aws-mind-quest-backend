@@ -27,7 +27,7 @@ async def get_dashboard_stats(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get user dashboard statistics"""
-    stats = service.get_dashboard_stats(UUID(current_user.id))
+    stats = service.get_dashboard_stats(current_user.id)
     
     return DashboardStats(
         total_xp=stats["total_xp"],
@@ -53,7 +53,7 @@ async def get_certification_progress(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get user progress for specific certification"""
-    progress = service.get_certification_progress(UUID(current_user.id), certification_id)
+    progress = service.get_certification_progress(current_user.id, certification_id)
     return ProgressResponse.model_validate(progress)
 
 
@@ -64,7 +64,7 @@ async def get_all_progress(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get user progress for all certifications"""
-    progresses = service.get_all_progress(UUID(current_user.id))
+    progresses = service.get_all_progress(current_user.id)
     return [ProgressResponse.model_validate(p) for p in progresses]
 
 
@@ -75,6 +75,6 @@ async def get_achievements(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get all user achievements"""
-    achievements = service.get_achievements(UUID(current_user.id))
+    achievements = service.get_achievements(current_user.id)
     return [AchievementResponse.model_validate(a) for a in achievements]
 

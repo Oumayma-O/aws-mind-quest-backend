@@ -2,7 +2,7 @@
 
 import logging
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.schemas.user import UserRegister, UserLogin, TokenResponse, UserResponse
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 
-def get_token(authorization: str = None):
+def get_token(authorization: str = Header(None)):
     """Extract token from Authorization header"""
     if not authorization:
         raise HTTPException(
@@ -107,7 +107,8 @@ async def register(
             db=db,
             email=user_data.email,
             username=user_data.username,
-            hashed_password=hashed_password
+            hashed_password=hashed_password,
+            selected_certification_id=user_data.selected_certification_id
         )
     except Exception as e:
         logger.error(f"Error creating user: {e}")

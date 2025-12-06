@@ -27,7 +27,7 @@ class EnhancedRetrievalService:
         self,
         certification_id: UUID,
         query: str,
-        top_k: int = 10,
+        top_k: int = 20,
         similarity_threshold: float = 0.3
     ) -> List[Dict[str, Any]]:
         """

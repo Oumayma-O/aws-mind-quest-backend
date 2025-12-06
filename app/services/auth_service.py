@@ -67,7 +67,7 @@ class AuthService:
         return db.query(User).filter(User.id == user_id).first()
     
     @staticmethod
-    def create_user(db: Session, email: str, username: str, hashed_password: str) -> User:
+    def create_user(db: Session, email: str, username: str, hashed_password: str, selected_certification_id: Optional[UUID] = None) -> User:
         """Create new user"""
         user = User(
             email=email,
@@ -79,7 +79,10 @@ class AuthService:
         
         # Create profile
         from app.database.models import Profile
-        profile = Profile(user_id=user.id)
+        profile = Profile(
+            user_id=user.id,
+            selected_certification_id=selected_certification_id
+        )
         db.add(profile)
         
         db.commit()

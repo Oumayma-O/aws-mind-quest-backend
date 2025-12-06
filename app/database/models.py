@@ -87,6 +87,8 @@ class Quiz(Base):
     score = Column(Integer, default=0)
     total_questions = Column(Integer, default=0)
     xp_earned = Column(Integer, default=0)
+    generation_time_seconds = Column(Numeric(10, 2), nullable=True)  # Time to generate quiz in seconds
+    llm_model = Column(String(255), nullable=True)  # Model name used (e.g., 'gpt-4o-mini')
     completed_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     

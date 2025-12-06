@@ -26,8 +26,8 @@ async def get_profile(
     current_user: UserResponse = Depends(get_current_user_dep)
 ):
     """Get current user's profile"""
-    profile = service.get_profile(UUID(current_user.id))
-    return ProfileResponse.model_validate(profile)
+    profile = service.get_profile(current_user.id)
+    return profile
 
 
 @router.patch("", response_model=ProfileResponse)
@@ -39,7 +39,7 @@ async def update_profile(
 ):
     """Update user profile"""
     profile = service.update_profile(
-        user_id=UUID(current_user.id),
+        user_id=current_user.id,
         selected_certification_id=update_data.selected_certification_id
     )
     return ProfileResponse.model_validate(profile)

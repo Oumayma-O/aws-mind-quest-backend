@@ -63,17 +63,42 @@ class ProgressService:
         }
     
     def get_certification_progress(self, user_id: UUID, certification_id: UUID) -> UserProgress:
-        """Get progress for a specific certification"""
+        """Get progress for a specific certification, creating it if it doesn't exist"""
         progress = self.db.query(UserProgress).filter(
             UserProgress.user_id == user_id,
             UserProgress.certification_id == certification_id
         ).first()
         
+        # Cold start: Create initial progress record if it doesn't exist
         if not progress:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Progress not found for this certification"
+            # Verify certification exists
+            from app.database.models import Certification
+            certification = self.db.query(Certification).filter(
+                Certification.id == certification_id
+            ).first()
+            
+            if not certification:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Certification not found"
+                )
+            
+            # Create initial progress
+            progress = UserProgress(
+                user_id=user_id,
+                certification_id=certification_id,
+                total_xp=0,
+                total_quizzes=0,
+                total_questions_answered=0,
+                correct_answers=0,
+                accuracy=0,
+                domain_difficulties={},
+                weak_domains=[]
             )
+            self.db.add(progress)
+            self.db.commit()
+            self.db.refresh(progress)
+            logger.info(f"Created initial progress for user {user_id} on certification {certification_id}")
         
         return progress
     

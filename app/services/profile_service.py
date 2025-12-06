@@ -16,8 +16,10 @@ class ProfileService:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_profile(self, user_id: UUID) -> Profile:
-        """Get user profile by user ID"""
+    def get_profile(self, user_id: UUID) -> dict:
+        """Get user profile by user ID with username and created_at"""
+        from app.database.models import User
+        
         profile = self.db.query(Profile).filter(
             Profile.user_id == user_id
         ).first()
@@ -28,7 +30,23 @@ class ProfileService:
                 detail="Profile not found"
             )
         
-        return profile
+        # Get user for username and created_at
+        user = self.db.query(User).filter(User.id == user_id).first()
+        
+        # Convert to dict and add user fields
+        profile_dict = {
+            "id": profile.id,
+            "user_id": profile.user_id,
+            "username": user.username if user else "",
+            "selected_certification_id": profile.selected_certification_id,
+            "xp": profile.xp,
+            "level": profile.level,
+            "current_streak": profile.current_streak,
+            "last_quiz_date": profile.last_quiz_date,
+            "created_at": profile.created_at
+        }
+        
+        return profile_dict
     
     def update_profile(
         self,
