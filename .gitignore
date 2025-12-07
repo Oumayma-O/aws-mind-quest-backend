@@ -29,6 +29,7 @@ venv/
 ENV/
 env/
 .env
+.env.prod
 .env.local
 .env.*.local
 .idea/

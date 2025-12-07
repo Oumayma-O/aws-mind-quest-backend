@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # OpenAI
     OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-5-mini"
     
     # Langfuse (LLM Observability)
     LANGFUSE_SECRET_KEY: str | None = None

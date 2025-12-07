@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # FastAPI Application (uses external Neon DB + Qdrant Cloud)
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aws-mind-quest-api
+    environment:
+      # Database - Neon PostgreSQL (cloud)
+      DATABASE_URL: ${DATABASE_URL}
+      
+      # Vector Database - Qdrant Cloud
+      QDRANT_URL: ${QDRANT_URL}
+      QDRANT_API_KEY: ${QDRANT_API_KEY}
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4o-mini
+      
+      # JWT
+      SECRET_KEY: ${SECRET_KEY}
+      
+      # Environment
+      ENV: production
+      DEBUG: "False"
+      
+      # Langfuse
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
+    
+    ports:
+      - "8000:8000"
+    
+    networks:
+      - aws-mind-quest-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Restart policy
+    restart: unless-stopped
+
+networks:
+  aws-mind-quest-network:
+    driver: bridge

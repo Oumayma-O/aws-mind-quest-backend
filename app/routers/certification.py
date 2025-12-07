@@ -120,7 +120,8 @@ async def upload_certification_document(
 async def delete_document(
     document_id: UUID,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user_dep)
+    current_user: UserResponse = Depends(get_current_user_dep),
+    service: CertificationService = Depends(get_certification_service)
 ):
     """Delete a certification document (admin only)"""
     service.delete_document(document_id, current_user.id)
