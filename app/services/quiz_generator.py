@@ -43,7 +43,7 @@ class QuizGeneratorService:
             api_key=settings.OPENAI_API_KEY,
             model=settings.OPENAI_MODEL,
             temperature=0.7,
-            max_tokens=2000
+            max_completion_tokens=2000  # Changed from max_tokens for newer models
         )
         self.parser = PydanticOutputParser(pydantic_object=QuizResponse)
 
