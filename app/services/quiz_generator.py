@@ -39,11 +39,14 @@ class QuizGeneratorService:
         self.langfuse_handler = CallbackHandler()
         logger.info("Langfuse tracing initialized for quiz generation")
         
-        self.llm = ChatOpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            model=settings.OPENAI_MODEL,
-            max_completion_tokens=2000  # Changed from max_tokens for newer models
-        )
+        # Configure LLM based on model type
+        llm_params = {
+            "api_key": settings.OPENAI_API_KEY,
+            "model": settings.OPENAI_MODEL,
+            "max_completion_tokens": 2000
+        }
+        
+        self.llm = ChatOpenAI(**llm_params)
         self.parser = PydanticOutputParser(pydantic_object=QuizResponse)
 
     def _create_prompt(self, certification: str, difficulty: str, domains: List[str], context: str = "") -> PromptTemplate:
