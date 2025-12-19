@@ -2,6 +2,8 @@
 
 AI-powered AWS certification exam preparation platform with intelligent quiz generation, adaptive learning, and real-time progress tracking.
 
+https://aws-mind-quest-backend.onrender.com/api/docs
+
 ## 📋 Project Description
 
 **AWS Mind Quest** is an intelligent learning platform that helps users prepare for AWS certification exams using AI-generated quizzes, personalized feedback, and adaptive difficulty levels. The platform tracks weak domains, awards achievements, and adjusts content based on user performance.
