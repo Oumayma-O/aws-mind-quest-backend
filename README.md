@@ -194,11 +194,49 @@ docker build -t aws-mind-quest-api:prod .
 docker-compose -f docker-compose.yml up -d
 ```
 
-### AWS Lambda (Serverless)
-```bash
-# Already configured in app/lambda_handler.py (Mangum ASGI adapter)
-# Package and deploy to AWS Lambda
-```
+## 🔎 Infrastructure & Monitoring
+
+### 🗄️ PostgreSQL Database (Neon)
+Visualize and manage the PostgreSQL database (tables, schemas, rows) hosted on **Neon**:
+
+🔗 **Neon Console – Database Tables**  
+https://console.neon.tech/app/projects/red-resonance-58377905/branches/br-broad-dawn-add95mac/tables?database=aws-mind-quest-db
+
+---
+
+### 🧠 Vector Database (Qdrant)
+Inspect vector collections, embeddings, and payload metadata used in the RAG pipeline:
+
+🔗 **Qdrant Dashboard – Collections View**  
+https://7f2cd069-2c3e-4eb6-9701-1d70fac40f9e.us-east4-0.gcp.cloud.qdrant.io:6333/dashboard#/collections
+
+---
+
+### 🚀 Backend Deployment Logs (Render)
+View real-time backend deployment logs, build output, and runtime errors:
+
+🔗 **Render Service Logs – FastAPI Backend**  
+https://dashboard.render.com/web/srv-d4qqrofpm1nc73bcr7pg/logs?r=1h
+
+---
+
+### 🌐 Frontend Deployment (Vercel)
+Access the deployed frontend application and monitor builds & deployments:
+
+🔗 **Vercel Project Dashboard – AWS Mind Quest Frontend**  
+https://vercel.com/oumaymaouerfelli3-4263s-projects/aws-mind-quest-frontend-q6si/Cm7FECJKrx173oVzvndDizUXpKKV
+
+---
+
+### 🔐 Access Notes
+- All dashboards require authenticated access
+- Secrets and credentials are **never hardcoded**
+- Production observability is split across:
+  - **Neon** → relational data
+  - **Qdrant** → vector search & embeddings
+  - **Render** → backend runtime & logs
+  - **Vercel** → frontend builds & hosting
+
 
 ## 🧪 Testing
 
